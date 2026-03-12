@@ -9,6 +9,7 @@ from __init__ import *
 from utils import refresh_markers
 from env.so100_tracking_env import SO100TrackEnv
 from exercises.ex1 import build_keypoints
+from exercises.ex2 import generate_quintic_spline_waypoints
 
 
 def parse_args():
@@ -23,14 +24,14 @@ def parse_args():
      
 def policy_callback(model, data):
     step_count = getattr(policy_callback, "step_count", 0)
-    keypoint_id = getattr(policy_callback, "keypoint_id", 0)
+    waypoint_id = getattr(policy_callback, "waypoint_id", 0)
 
     ee_tracking_error = np.linalg.norm(data.site("ee_site").xpos - data.mocap_pos[0])
-    if ee_tracking_error < 0.05:
-        keypoint_id += 1
-        if keypoint_id >= len(keypoints):
-            keypoint_id = 0
-    data.mocap_pos[0] = keypoints[keypoint_id]
+    if ee_tracking_error < 0.08:
+        waypoint_id += 1
+        if waypoint_id >= len(total_waypoints):
+            waypoint_id = 0
+    data.mocap_pos[0] = total_waypoints[waypoint_id]
 
     if step_count > play_episode_length * env.ctrl_decimation:
         step_count = 0
@@ -41,7 +42,7 @@ def policy_callback(model, data):
         data.ctrl[:] = env._process_action(action)
 
     policy_callback.step_count = step_count + 1
-    policy_callback.keypoint_id = keypoint_id
+    policy_callback.waypoint_id = waypoint_id
 
 
 if __name__ == "__main__":
@@ -52,8 +53,20 @@ if __name__ == "__main__":
     play_episode_length_s = 5
     play_episode_length = int(play_episode_length_s / env.ctrl_timestep)
 
-    keypoints = build_keypoints(count=20, width=0.2, x_offset=0.3, z_offset=0.25)
-    env.data.mocap_pos[0] = keypoints[0]
+    keypoints = build_keypoints()
+
+    num_waypoints = 3
+
+    total_waypoints = []
+    keypoint_id = 0
+    while keypoint_id < len(keypoints):
+        next_keypoint_id = (keypoint_id + 1) % len(keypoints)
+        waypoints = generate_quintic_spline_waypoints(keypoints[keypoint_id], keypoints[next_keypoint_id], num_waypoints)
+        total_waypoints.append(waypoints)
+        keypoint_id += 1
+    total_waypoints = np.vstack(total_waypoints)
+
+    env.data.mocap_pos[0] = total_waypoints[0]
 
     print(f"Loading model from {policy_path}...")
     rl_model = PPO.load(policy_path, device=args.device)
@@ -61,6 +74,7 @@ if __name__ == "__main__":
     mujoco.set_mjcb_control(policy_callback)
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         refresh_markers(viewer, keypoints)
+        refresh_markers(viewer, total_waypoints, radius=0.003, rgba=(0, 1, 1, 1), ngeom_start=len(keypoints))
         while viewer.is_running():
             mujoco.mj_step(env.model, env.data)
             viewer.sync()
