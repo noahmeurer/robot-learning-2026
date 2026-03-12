@@ -44,7 +44,7 @@ def reset_target_position(base_pos: np.ndarray) -> np.ndarray:
     return target_pos
 
 
-def process_action(action: np.ndarray, jnt_range: np.ndarray) -> np.ndarray:
+def process_action(action: np.ndarray, jnt_range: np.ndarray, current_qpos: np.ndarray, delta_frac: float = 0.05) -> np.ndarray:
     """
     TODO: Convert normalized actions [-1, 1] to target joint positions.
     
@@ -55,14 +55,17 @@ def process_action(action: np.ndarray, jnt_range: np.ndarray) -> np.ndarray:
     Inputs:
     - action: np.ndarray. Normalized actions from the policy. Dimensionality: 1D array, Shape: (num_joints,).
     - jnt_range: np.ndarray. Lower and upper limits for joints. Dimensionality: 2D array, Shape: (num_joints, 2).
+    - current_qpos: np.ndarray with current joint positions, shape (num_joints,).
+    - delta_frac: float max per-step joint position change as a fraction of the joint span
 
     Returns:
     - target_qpos: np.ndarray. Target joint positions to apply as control. Dimensionality: 1D array, Shape: (num_joints,).
     """
-    action = np.clip(action, -1, 1)  # add clipping for safety
+    action = np.clip(action, -1.0, 1.0)  # add clipping for safety
     span = jnt_range[:, 1] - jnt_range[:, 0]
-    target_qpos = (action + 1) * span / 2  # Scale
-    target_qpos += jnt_range[:, 0]  # Shift
+    max_delta = delta_frac * span
+    target_qpos = current_qpos + action * max_delta
+    target_qpos = np.clip(target_qpos, jnt_range[:, 0], jnt_range[:, 1])
     return target_qpos
 
 

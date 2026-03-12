@@ -55,7 +55,7 @@ class SO100TrackEnv(gym.Env):
         return self._get_obs(), {}
 
     def _process_action(self, action):
-        return process_action(action, self.model.jnt_range)
+        return process_action(action, self.model.jnt_range, self.data.qpos.copy())
 
     def compute_reward(self):
         return compute_reward(self.ee_tracking_error)
