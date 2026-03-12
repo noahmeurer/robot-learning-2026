@@ -3,11 +3,11 @@
 ## Global Submission Requirements
 
 - [x] Solved individually (no shared code).
-- [ ] All required files are ready for Gradescope upload.
-- [ ] Videos are in `.mp4` format.
-- [ ] Total required video content across Exercises 1-3 is under the global cap:
-  - [ ] `< 5:30` total (or `< 4:30` if not doing bonus).
-- [ ] If total upload size exceeds `100 MB`, split into multiple smaller video files.
+- [x] All required files are ready for Gradescope upload.
+- [x] Videos are in `.mp4` format.
+- [x] Total required video content across Exercises 1-3 is under the global cap:
+  - [x] `< 5:30` total (or `< 4:30` if not doing bonus).
+- [x] If total upload size exceeds `100 MB`, split into multiple smaller video files.
 
 ## Exercise 1: IK and Lemniscate Tracking
 
@@ -18,9 +18,9 @@
   - [x] IK TODOs in `ik_track`
 
 ### Video (Required)
-- [ ] `.mp4` video showing robot tracking generated keypoints.
-- [ ] Includes answers to all Exercise 1 theoretical questions.
-- [ ] Video duration `< 2:00` including motion + theory answers.
+- [x] `.mp4` video showing robot tracking generated keypoints.
+- [x] Includes answers to all Exercise 1 theoretical questions.
+- [x] Video duration `< 2:00` including motion + theory answers.
 
 ### Theory
 - [x] 1-sentence answer: effect of increasing lemniscate width `a`.
@@ -36,14 +36,14 @@
   - [x] PID terms in `pid_control(...)`
 
 ### Video (Required)
-- [ ] `.mp4` video showing robot moving between waypoints.
-- [ ] Includes answers to all Exercise 2 theoretical questions.
-- [ ] Video duration `< 2:00` including motion + theory answers.
+- [x] `.mp4` video showing robot moving between waypoints.
+- [x] Includes answers to all Exercise 2 theoretical questions.
+- [x] Video duration `< 2:00` including motion + theory answers.
 
 ### Theory
-- [ ] 1-sentence answer: what happens as `K_P` increases.
-- [ ] 1-sentence answer: how `K_D` mitigates that effect.
-- [ ] 1-sentence answer: when non-zero `K_I` is needed.
+- [x] 1-sentence answer: what happens as `K_P` increases.
+- [x] 1-sentence answer: how `K_D` mitigates that effect.
+- [x] 1-sentence answer: when non-zero `K_I` is needed.
 
 ## Exercise 3: RL Policy for Random Targets
 
@@ -56,10 +56,10 @@
   - [x] build observation vector
 
 ### Video (Required)
-- [ ] `.mp4` video showing random-target tracking.
-- [ ] Includes terminal printouts of final `ee_tracking_error` and average over 10 episodes.
-- [ ] Required part duration `< 0:30`.
-- [ ] Average final EE tracking error `< 0.05` (target for full score).
+- [x] `.mp4` video showing random-target tracking.
+- [x] Includes terminal printouts of final `ee_tracking_error` and average over 10 episodes.
+- [x] Required part duration `< 0:30`.
+- [x] Average final EE tracking error `< 0.05` (target for full score).
 
 ### Bonus (Optional)
 - [ ] If doing bonus: include theory answer + modified policy/environment performance.
@@ -68,7 +68,7 @@
 
 ## Final Upload Checklist
 
-- [ ] Code files included: `exercises/ex1.py`, `exercises/ex2.py`, `exercises/ex3.py`.
-- [ ] Video(s) include all required content across exercises.
-- [ ] Combined video runtime satisfies global limit (`< 5:30`, or `< 4:30` without bonus).
-- [ ] If needed, videos split only for file-size reasons (`> 100 MB`).
+- [x] Code files included: `exercises/ex1.py`, `exercises/ex2.py`, `exercises/ex3.py`.
+- [x] Video(s) include all required content across exercises.
+- [x] Combined video runtime satisfies global limit (`< 5:30`, or `< 4:30` without bonus).
+- [x] If needed, videos split only for file-size reasons (`> 100 MB`).
