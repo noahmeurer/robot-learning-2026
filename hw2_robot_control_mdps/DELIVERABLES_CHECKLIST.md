@@ -2,7 +2,7 @@
 
 ## Global Submission Requirements
 
-- [ ] Solved individually (no shared code).
+- [x] Solved individually (no shared code).
 - [ ] All required files are ready for Gradescope upload.
 - [ ] Videos are in `.mp4` format.
 - [ ] Total required video content across Exercises 1-3 is under the global cap:
@@ -12,10 +12,10 @@
 ## Exercise 1: IK and Lemniscate Tracking
 
 ### Code
-- [ ] Completed all TODOs in `exercises/ex1.py`:
-  - [ ] `get_lemniscate_keypoint(t, a)`
-  - [ ] `build_keypoints(count, width, x_offset, z_offset)`
-  - [ ] IK TODOs in `ik_track`
+- [x] Completed all TODOs in `exercises/ex1.py`:
+  - [x] `get_lemniscate_keypoint(t, a)`
+  - [x] `build_keypoints(count, width, x_offset, z_offset)`
+  - [x] IK TODOs in `ik_track`
 
 ### Video (Required)
 - [ ] `.mp4` video showing robot tracking generated keypoints.
@@ -23,17 +23,17 @@
 - [ ] Video duration `< 2:00` including motion + theory answers.
 
 ### Theory
-- [ ] 1-sentence answer: effect of increasing lemniscate width `a`.
-- [ ] 1-sentence answer: effect of changing IK `dt`.
-- [ ] 1-sentence answer: numerical IK vs analytical IK (pros/cons).
-- [ ] 1-sentence answer: limits of this IK solver vs SOTA solvers.
+- [x] 1-sentence answer: effect of increasing lemniscate width `a`.
+- [x] 1-sentence answer: effect of changing IK `dt`.
+- [x] 1-sentence answer: numerical IK vs analytical IK (pros/cons).
+- [x] 1-sentence answer: limits of this IK solver vs SOTA solvers.
 
 ## Exercise 2: Quintic Waypoints and PID
 
 ### Code
-- [ ] Completed all TODOs in `exercises/ex2.py`:
-  - [ ] `generate_quintic_spline_waypoints(start, end, num_points)`
-  - [ ] PID terms in `pid_control(...)`
+- [x] Completed all TODOs in `exercises/ex2.py`:
+  - [x] `generate_quintic_spline_waypoints(start, end, num_points)`
+  - [x] PID terms in `pid_control(...)`
 
 ### Video (Required)
 - [ ] `.mp4` video showing robot moving between waypoints.
@@ -48,12 +48,12 @@
 ## Exercise 3: RL Policy for Random Targets
 
 ### Code
-- [ ] Completed all TODOs in `exercises/ex3.py`:
-  - [ ] reset robot
-  - [ ] sample/reset target position
-  - [ ] process action to joint targets
-  - [ ] compute reward
-  - [ ] build observation vector
+- [x] Completed all TODOs in `exercises/ex3.py`:
+  - [x] reset robot
+  - [x] sample/reset target position
+  - [x] process action to joint targets
+  - [x] compute reward
+  - [x] build observation vector
 
 ### Video (Required)
 - [ ] `.mp4` video showing random-target tracking.
