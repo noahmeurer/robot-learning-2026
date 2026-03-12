@@ -81,16 +81,13 @@ def ik_track(model, data, site_name, target_pos,
     # Store the original joint configuration to restore later
     original_qpos = data.qpos.copy()
 
-    # Determine site id
-    site_id = model.site(site_name).id
-
     for i in range(max_iters):
         # use forward kinematics to update current end-effector position: data.site(site_name).xpos
         mujoco.mj_kinematics(model, data)
         mujoco.mj_comPos(model, data)
 
         # TODO: compute end-effector position error
-        err_pos = target_pos - data.site_xpos[site_id]
+        err_pos = target_pos - data.site(site_name).xpos
 
         # TODO: check if the 2-norm of the position error is within a small threshold (1e-3), if yes, break the loop
         if np.linalg.norm(err_pos) <= 1e-3:
