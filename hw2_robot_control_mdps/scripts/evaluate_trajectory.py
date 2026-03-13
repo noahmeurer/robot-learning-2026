@@ -25,24 +25,32 @@ def parse_args():
 def policy_callback(model, data):
     step_count = getattr(policy_callback, "step_count", 0)
     waypoint_id = getattr(policy_callback, "waypoint_id", 0)
+    hold_ctrl_ticks = getattr(policy_callback, "hold_ctrl_ticks", 0)
 
-    ee_tracking_error = np.linalg.norm(data.site("ee_site").xpos - data.mocap_pos[0])
-    if ee_tracking_error < 0.08:
-        waypoint_id += 1
-        if waypoint_id >= len(total_waypoints):
-            waypoint_id = 0
-    data.mocap_pos[0] = total_waypoints[waypoint_id]
-
-    if step_count > play_episode_length * env.ctrl_decimation:
-        step_count = 0
-    
     if step_count % env.ctrl_decimation == 0:
+        ee_tracking_error = np.linalg.norm(data.site("ee_site").xpos - data.mocap_pos[0])
+        reached = ee_tracking_error < 0.03
+        timeout = hold_ctrl_ticks >= 3
+
+        if reached or timeout:
+            waypoint_id = (waypoint_id + 1) % len(total_waypoints)
+            hold_ctrl_ticks = 0
+        else:
+            hold_ctrl_ticks += 1
+
+        data.mocap_pos[0] = total_waypoints[waypoint_id]
+
         obs = env._get_obs()
         action, _states = rl_model.predict(obs, deterministic=True)
         data.ctrl[:] = env._process_action(action)
 
-    policy_callback.step_count = step_count + 1
+    if step_count >= play_episode_length * env.ctrl_decimation:
+        step_count = 0
+
     policy_callback.waypoint_id = waypoint_id
+    policy_callback.hold_ctrl_ticks = hold_ctrl_ticks
+
+    policy_callback.step_count = step_count + 1
 
 
 if __name__ == "__main__":
@@ -55,7 +63,7 @@ if __name__ == "__main__":
 
     keypoints = build_keypoints()
 
-    num_waypoints = 3
+    num_waypoints = 7
 
     total_waypoints = []
     keypoint_id = 0
