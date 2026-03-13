@@ -27,7 +27,7 @@ class SO100TrackEnv(gym.Env):
 
         # Timestep & Episode
         self.sim_timestep = self.model.opt.timestep # 0.002s (500 Hz)
-        self.ctrl_decimation = 50 # makes control frequency 10 Hz
+        self.ctrl_decimation = 10 # makes control frequency 50 Hz
         self.ctrl_timestep = self.sim_timestep * self.ctrl_decimation # 0.1
         self.max_episode_length_s = 10
         self.max_episode_length = int(self.max_episode_length_s / self.ctrl_timestep) # 100 steps per episode

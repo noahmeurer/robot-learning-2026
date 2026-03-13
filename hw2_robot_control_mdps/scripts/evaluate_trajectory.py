@@ -30,7 +30,7 @@ def policy_callback(model, data):
     if step_count % env.ctrl_decimation == 0:
         ee_tracking_error = np.linalg.norm(data.site("ee_site").xpos - data.mocap_pos[0])
         reached = ee_tracking_error < 0.03
-        timeout = hold_ctrl_ticks >= 3
+        timeout = hold_ctrl_ticks >= int(0.3 / env.ctrl_timestep)
 
         if reached or timeout:
             waypoint_id = (waypoint_id + 1) % len(total_waypoints)
@@ -61,9 +61,9 @@ if __name__ == "__main__":
     play_episode_length_s = 5
     play_episode_length = int(play_episode_length_s / env.ctrl_timestep)
 
-    keypoints = build_keypoints(40)
+    keypoints = build_keypoints()
 
-    num_waypoints = 2
+    num_waypoints = 5
 
     total_waypoints = []
     keypoint_id = 0

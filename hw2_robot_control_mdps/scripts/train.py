@@ -41,9 +41,10 @@ if __name__ == "__main__":
             device=args.device,
             verbose=1,
             tensorboard_log=EXP_DIR,
-            gamma=0.99,
+            gamma=0.998,
             ent_coef=0.001,
-            vf_coef=1.0
+            vf_coef=1.0,
+            n_steps=4096
         )
     else:
         # Create a single environment for debug with rendering
@@ -54,9 +55,10 @@ if __name__ == "__main__":
             device=args.device,
             verbose=1,
             tensorboard_log=EXP_DIR,
-            gamma=0.99,
+            gamma=0.998,
             ent_coef=0.001,
-            vf_coef=1.0
+            vf_coef=1.0,
+            n_steps=4096
         )
 
     update_checkpoint_callback = UpdateCheckpointCallback(

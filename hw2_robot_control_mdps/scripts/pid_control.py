@@ -29,13 +29,13 @@ def pid_callback(model, data):
 
     
 if __name__ == "__main__":
-    keypoints = build_keypoints(40)
+    keypoints = build_keypoints()
     
     model = mujoco.MjModel.from_xml_path(str(TORQUE_CTRL_XML_PATH))
     data = mujoco.MjData(model)
 
     site_name = "ee_site"
-    num_waypoints = 2
+    num_waypoints = 5
 
     total_waypoints = []
     keypoint_id = 0
