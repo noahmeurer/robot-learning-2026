@@ -61,9 +61,9 @@ if __name__ == "__main__":
     play_episode_length_s = 5
     play_episode_length = int(play_episode_length_s / env.ctrl_timestep)
 
-    keypoints = build_keypoints()
+    keypoints = build_keypoints(40)
 
-    num_waypoints = 7
+    num_waypoints = 2
 
     total_waypoints = []
     keypoint_id = 0

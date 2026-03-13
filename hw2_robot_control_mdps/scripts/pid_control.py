@@ -29,14 +29,13 @@ def pid_callback(model, data):
 
     
 if __name__ == "__main__":
-    keypoints = build_keypoints()
+    keypoints = build_keypoints(40)
     
     model = mujoco.MjModel.from_xml_path(str(TORQUE_CTRL_XML_PATH))
     data = mujoco.MjData(model)
 
     site_name = "ee_site"
-    num_waypoints = 7
-    ctrl_decimation = 50  # Match RL control rate (10 Hz at 500 Hz sim)
+    num_waypoints = 2
 
     total_waypoints = []
     keypoint_id = 0
@@ -56,7 +55,6 @@ if __name__ == "__main__":
     tracking_error_history = np.array([])
 
     waypoint_id = 0
-    hold_ctrl_ticks = 0
     step_count = 0
     mujoco.set_mjcb_control(pid_callback)
     with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -71,16 +69,9 @@ if __name__ == "__main__":
             mujoco.mj_step(model, data)
             viewer.sync()
 
-            if step_count % ctrl_decimation == 0:
-                reached = np.linalg.norm(total_waypoints[waypoint_id] - data.site(site_name).xpos) < 3e-2
-                timeout = hold_ctrl_ticks >= 2
-
-                if reached or timeout:
-                    tracking_error_history = np.array([])
-                    waypoint_id = (waypoint_id + 1) % len(total_waypoints)
-                    hold_ctrl_ticks = 0
-                else:
-                    hold_ctrl_ticks += 1
+            if np.linalg.norm(total_waypoints[waypoint_id] - data.site(site_name).xpos) < 3e-2:
+                tracking_error_history = np.array([])
+                waypoint_id = (waypoint_id + 1) % len(total_waypoints)
 
             step_count += 1
             time.sleep(model.opt.timestep)
