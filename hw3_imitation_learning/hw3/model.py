@@ -241,15 +241,119 @@ class ObstaclePolicy(BasePolicy):
 class MultiTaskPolicy(BasePolicy):
     """Goal-conditioned policy for the multicube scene."""
 
+    # [ee_xyz(3), gripper(1), red_xyz(3), green_xyz(3), blue_xyz(3), goal_onehot(3), goal_pos(3)]
+    _EE_SLICE = slice(0, 3)
+    _GRIPPER_SLICE = slice(3, 4)
+    _RED_SLICE = slice(4, 7)
+    _GREEN_SLICE = slice(7, 10)
+    _BLUE_SLICE = slice(10, 13)
+    _GOAL_ONEHOT_SLICE = slice(13, 16)
+    _GOAL_POS_SLICE = slice(16, 19)
+    _EXPECTED_STATE_DIM = 19
+    _TRANSFORMED_STATE_DIM = 13
+
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        chunk_size: int,
+        backbone: str = "mlp",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(state_dim, action_dim, chunk_size)
+        assert isinstance(backbone, str) and backbone, (
+            "MultiTaskPolicy requires a non-empty backbone string."
+        )
+        if state_dim != self._EXPECTED_STATE_DIM:
+            raise ValueError(
+                "MultiTaskPolicy expects state_dim=19 for "
+                "[ee_xyz, gripper, red_xyz, green_xyz, blue_xyz, state_goal, goal_pos], "
+                f"got {state_dim}."
+            )
+
+        self.loss_fn = nn.MSELoss()
+        self.backbone_name = backbone
+        if "d_model" in kwargs:
+            kwargs = {}
+        self.backbone_kwargs = resolve_backbone_kwargs(backbone, **kwargs)
+
+        if backbone == "mlp":
+            self.backbone = MLP(
+                self._TRANSFORMED_STATE_DIM,
+                chunk_size * action_dim,
+                hidden_dim=self.backbone_kwargs["hidden_dim"],
+                depth=self.backbone_kwargs["depth"],
+                use_layernorm=self.backbone_kwargs["use_layernorm"],
+                dropout=self.backbone_kwargs["dropout"],
+            )
+        elif backbone == "residual_mlp":
+            self.backbone = ResidualMLP(
+                self._TRANSFORMED_STATE_DIM,
+                chunk_size * action_dim,
+                hidden_dim=self.backbone_kwargs["hidden_dim"],
+                depth=self.backbone_kwargs["depth"],
+                use_layernorm=self.backbone_kwargs["use_layernorm"],
+                dropout=self.backbone_kwargs["dropout"],
+            )
+        else:
+            raise ValueError(f"Unknown backbone: {backbone}")
+
+    def _extract_target_cube_xyz(self, state: torch.Tensor) -> torch.Tensor:
+        """Select target cube xyz from [red, green, blue] using state_goal."""
+        red_xyz = state[:, self._RED_SLICE]
+        green_xyz = state[:, self._GREEN_SLICE]
+        blue_xyz = state[:, self._BLUE_SLICE]
+        cubes_rgb = torch.stack([red_xyz, green_xyz, blue_xyz], dim=1)  # (B, 3, 3)
+
+        goal_vec = state[:, self._GOAL_ONEHOT_SLICE]
+        if goal_vec.shape[1] != 3:
+            raise ValueError(f"Expected state_goal dim=3, got {goal_vec.shape[1]}.")
+
+        # Decode color index from the normalized goal channels.
+        goal_idx = torch.argmax(goal_vec, dim=1)
+        goal_onehot = torch.nn.functional.one_hot(goal_idx, num_classes=3).to(state.dtype)  # (B, 3)
+        target_cube_xyz = torch.sum(cubes_rgb * goal_onehot.unsqueeze(-1), dim=1)  # (B, 3)
+        return target_cube_xyz
+
     def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        pred_action_chunk = self(state)
+        assert pred_action_chunk.shape == action_chunk.shape, (
+            "Predicted and actual action chunks must have the same shape"
+        )
+        return self.loss_fn(pred_action_chunk, action_chunk)
 
     def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        return self(state)
 
-    def forward(self) -> torch.Tensor:
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Return predicted action chunk of shape (B, chunk_size, action_dim)."""
-        raise NotImplementedError
+        assert state.ndim == 2 and state.shape[1] == self.state_dim, (
+            "State must have shape (B, state_dim)"
+        )
+        ee_xyz = state[:, self._EE_SLICE]
+        gripper = state[:, self._GRIPPER_SLICE]
+        goal_pos = state[:, self._GOAL_POS_SLICE]
+        target_cube_xyz = self._extract_target_cube_xyz(state)
+
+        transformed_state = torch.cat(
+            [
+                ee_xyz,
+                target_cube_xyz - ee_xyz,
+                goal_pos - ee_xyz,
+                goal_pos - target_cube_xyz,
+                gripper,
+            ],
+            dim=1,
+        )
+        assert transformed_state.shape[1] == self._TRANSFORMED_STATE_DIM, (
+            f"Expected transformed dim={self._TRANSFORMED_STATE_DIM}, "
+            f"got {transformed_state.shape[1]}."
+        )
+
+        B = state.shape[0]
+        pred = self.backbone(transformed_state)
+        pred = pred.reshape(B, self.chunk_size, self.action_dim)
+        return pred
 
 
 PolicyType: TypeAlias = Literal["obstacle", "multitask"]
@@ -280,9 +384,16 @@ def build_policy(
             # TODO: Build with your chosen specifications
         )
     if policy_type == "multitask":
+        if backbone is None:
+            backbone = "mlp"
+        assert isinstance(backbone, str) and backbone, (
+            "build_policy() requires a non-empty 'backbone' for multitask policy."
+        )
         return MultiTaskPolicy(
-            action_dim=action_dim,
             state_dim=state_dim,
-            # TODO: Build with your chosen specifications
+            action_dim=action_dim,
+            chunk_size=chunk_size,
+            backbone=backbone,
+            **kwargs,
         )
     raise ValueError(f"Unknown policy type: {policy_type}")
