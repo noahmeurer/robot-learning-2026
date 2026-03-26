@@ -1,5 +1,5 @@
 {
-    "zarr": "datasets/processed/single_cube/processed_ee_xyz_ex1.zarr",
+    "zarr": "datasets/processed/single_cube/processed_ee_xyz.zarr",
     "policy": "obstacle",
     "backbone": "residual_mlp",
     "chunk_size": 32,

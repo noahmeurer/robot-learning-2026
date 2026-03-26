@@ -177,7 +177,7 @@ class ObstaclePolicy(BasePolicy):
         state_dim: int, 
         action_dim: int, 
         chunk_size: int,
-        backbone: str = "mlp",
+        backbone: str = "residual_mlp",
         **kwargs
         ) -> None:
         super().__init__(state_dim, action_dim, chunk_size)
@@ -188,6 +188,8 @@ class ObstaclePolicy(BasePolicy):
         # Define loss function
         self.loss_fn = nn.MSELoss()
         self.backbone_name = backbone
+        if 'd_model' in kwargs:
+            kwargs = {}
         self.backbone_kwargs = resolve_backbone_kwargs(backbone, **kwargs)
 
         # Select backbone
@@ -265,7 +267,7 @@ def build_policy(
 ) -> BasePolicy:
     if policy_type == "obstacle":
         if backbone is None:
-            backbone = "mlp"
+            backbone = "residual_mlp"
         assert isinstance(backbone, str) and backbone, (
             "build_policy() requires a non-empty 'backbone' for obstacle policy."
         )
