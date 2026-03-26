@@ -1,5 +1,5 @@
 {
-    "zarr": "datasets/processed/single_cube/processed_ee_xyz.zarr",
+    "zarr": "datasets/processed/multi_cube/processed_ee_xyz.zarr",
     "policy": "multitask",
     "backbone": "mlp",
     "chunk_size": 32,
