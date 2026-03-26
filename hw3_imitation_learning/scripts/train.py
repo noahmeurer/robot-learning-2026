@@ -181,8 +181,18 @@ def main() -> None:
             "Optional checkpoint name stem (e.g. 'ex1'). "
         ),
     )
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path to an existing checkpoint to resume from. "
+            "Loads model weights and continues for additional epochs."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     args = parser.parse_args()
+    cli_save_name = args.save_name
 
     # ── load config (optional) ─────────────────────────────────────────
     if args.task_config is not None:
@@ -216,8 +226,18 @@ def main() -> None:
             args.backbone_kwargs = cfg["backbone_kwargs"]
         if "save_name" in cfg and cfg["save_name"] is not None:
             args.save_name = str(cfg["save_name"])
+        if (
+            "resume_from_checkpoint" in cfg
+            and cfg["resume_from_checkpoint"] is not None
+        ):
+            args.resume_from_checkpoint = Path(cfg["resume_from_checkpoint"])
         if "seed" in cfg and cfg["seed"] is not None:
             args.seed = int(cfg["seed"])
+
+    # Exception to config-first behavior: an explicitly provided CLI --save-name
+    # should take precedence over config save_name.
+    if cli_save_name is not None:
+        args.save_name = cli_save_name
 
     # Default backbone if neither CLI nor config specified one.
     if args.backbone is None:
@@ -251,6 +271,10 @@ def main() -> None:
     num_epochs = args.epochs if args.epochs is not None else EPOCHS
     if num_epochs <= 0:
         raise SystemExit("--epochs must be a positive integer.")
+    if args.resume_from_checkpoint is not None and not args.resume_from_checkpoint.exists():
+        raise SystemExit(
+            f"--resume-from-checkpoint file not found: {args.resume_from_checkpoint}"
+        )
 
     # Require explicit state/action specification via CLI or config.
     # (We intentionally do NOT fall back to the dataset's default single key here.)
@@ -331,7 +355,81 @@ def main() -> None:
     )
 
     # ── training loop ─────────────────────────────────────────────────
+    start_epoch = 0
     best_val = float("inf")
+    resumed_ckpt: Path | None = None
+
+    if args.resume_from_checkpoint is not None:
+        ckpt_path = args.resume_from_checkpoint
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        if "model_state_dict" not in ckpt:
+            raise SystemExit(
+                "Resume checkpoint is missing required key 'model_state_dict'."
+            )
+
+        # Compatibility checks for safe resume.
+        ckpt_policy_type = ckpt.get("policy_type")
+        if ckpt_policy_type is None:
+            print("WARNING: resume checkpoint has no 'policy_type'; skipping this check.")
+        elif str(ckpt_policy_type) != args.policy:
+            raise SystemExit(
+                "Resume checkpoint policy mismatch: "
+                f"checkpoint={ckpt_policy_type!r}, current={args.policy!r}."
+            )
+
+        ckpt_state_dim = ckpt.get("state_dim")
+        if ckpt_state_dim is None:
+            print("WARNING: resume checkpoint has no 'state_dim'; skipping this check.")
+        elif int(ckpt_state_dim) != int(states.shape[1]):
+            raise SystemExit(
+                "Resume checkpoint state_dim mismatch: "
+                f"checkpoint={int(ckpt_state_dim)}, current={int(states.shape[1])}."
+            )
+
+        ckpt_action_dim = ckpt.get("action_dim")
+        if ckpt_action_dim is None:
+            print("WARNING: resume checkpoint has no 'action_dim'; skipping this check.")
+        elif int(ckpt_action_dim) != int(actions.shape[1]):
+            raise SystemExit(
+                "Resume checkpoint action_dim mismatch: "
+                f"checkpoint={int(ckpt_action_dim)}, current={int(actions.shape[1])}."
+            )
+
+        ckpt_chunk_size = ckpt.get("chunk_size")
+        if ckpt_chunk_size is None:
+            print("WARNING: resume checkpoint has no 'chunk_size'; skipping this check.")
+        elif int(ckpt_chunk_size) != int(args.chunk_size):
+            raise SystemExit(
+                "Resume checkpoint chunk_size mismatch: "
+                f"checkpoint={int(ckpt_chunk_size)}, current={int(args.chunk_size)}."
+            )
+
+        ckpt_state_keys = ckpt.get("state_keys")
+        if ckpt_state_keys is None:
+            print("WARNING: resume checkpoint has no 'state_keys'; skipping this check.")
+        elif list(ckpt_state_keys) != list(args.state_keys):
+            raise SystemExit(
+                "Resume checkpoint state_keys mismatch between checkpoint and current run."
+            )
+
+        ckpt_action_keys = ckpt.get("action_keys")
+        if ckpt_action_keys is None:
+            print("WARNING: resume checkpoint has no 'action_keys'; skipping this check.")
+        elif list(ckpt_action_keys) != list(args.action_keys):
+            raise SystemExit(
+                "Resume checkpoint action_keys mismatch between checkpoint and current run."
+            )
+
+        model.load_state_dict(ckpt["model_state_dict"])
+        start_epoch = int(ckpt.get("epoch", 0))
+        if "epoch" not in ckpt:
+            print("WARNING: resume checkpoint has no 'epoch'; starting from epoch 0.")
+        best_val = float(ckpt.get("val_loss", float("inf")))
+        if "val_loss" not in ckpt:
+            print(
+                "WARNING: resume checkpoint has no 'val_loss'; best_val initialized to inf."
+            )
+        resumed_ckpt = ckpt_path
 
     # Derive action space tag from action keys (e.g. "ee_xyz", "joints")
     action_space = "unknown"
@@ -403,8 +501,12 @@ def main() -> None:
     print(f"  seed={args.seed}")
     print(f"  model_parameters={n_params:,}")
     print(f"  checkpoint_path={save_path}")
+    print(f"  resume_from_checkpoint={resumed_ckpt}")
+    print(f"  resume_start_epoch={start_epoch}")
+    print(f"  initial_best_val={best_val}")
 
-    for epoch in range(1, num_epochs + 1):
+    final_epoch = start_epoch + num_epochs
+    for epoch in range(start_epoch + 1, final_epoch + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, device)
         val_loss = evaluate(model, val_loader, device)
         scheduler.step()
@@ -443,7 +545,7 @@ def main() -> None:
             tag = " ✓ saved"
 
         print(
-            f"Epoch {epoch:3d}/{num_epochs} | "
+            f"Epoch {epoch:3d}/{final_epoch} | "
             f"train {train_loss:.6f} | val {val_loss:.6f}{tag}"
         )
 
