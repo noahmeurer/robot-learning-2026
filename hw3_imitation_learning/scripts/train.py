@@ -23,19 +23,16 @@ from hw3.dataset import (
     load_and_merge_zarrs,
     load_zarr,
 )
-from hw3.model import BasePolicy, build_policy
+from hw3.model import BasePolicy, VALID_BACKBONES, build_policy, get_policy_checkpoint_config
 
 # TODO: Any imports you want from torch or other libraries we use. Not allowed: libraries we don't use
 from torch.utils.data import DataLoader, random_split
 
 # TODO: Choose your own hyperparameters!
-EPOCHS = 100 
+EPOCHS = 200
 BATCH_SIZE = 64
 LR = 1e-3
 VAL_SPLIT = 0.1
-VALID_BACKBONES = ("mlp",)
-
-
 def train_one_epoch(
     model: BasePolicy,
     loader: DataLoader,
@@ -153,12 +150,27 @@ def main() -> None:
         help=f"Learning rate (default: module LR={LR}).",
     )
     parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help=f"Number of training epochs (default: module EPOCHS={EPOCHS}).",
+    )
+    parser.add_argument(
         "--backbone",
         type=str,
         default=None,
         help=(
-            f"Model backbone to use. Supported: {VALID_BACKBONES}. "
+            f"Model backbone to use. Supported: {tuple(sorted(VALID_BACKBONES))}. "
             "If provided in --task-config, it overrides CLI; defaults to 'mlp'."
+        ),
+    )
+    parser.add_argument(
+        "--backbone-kwargs",
+        type=str,
+        default=None,
+        help=(
+            "Optional JSON object with per-backbone kwargs, e.g. "
+            '\'{"hidden_dim": 768, "depth": 6}\'.'
         ),
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
@@ -166,7 +178,7 @@ def main() -> None:
 
     # ── load config (optional) ─────────────────────────────────────────
     if args.task_config is not None:
-        cfg_path = args.task_config
+        cfg_path = Path(f"configs/{args.task_config}.json")
         if not cfg_path.exists():
             raise FileNotFoundError(f"Config file not found: {cfg_path}")
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -188,8 +200,12 @@ def main() -> None:
             args.action_keys = cfg["action_keys"]
         if "lr" in cfg and cfg["lr"] is not None:
             args.lr = float(cfg["lr"])
+        if "epochs" in cfg and cfg["epochs"] is not None:
+            args.epochs = int(cfg["epochs"])
         if "backbone" in cfg and cfg["backbone"] is not None:
             args.backbone = str(cfg["backbone"])
+        if "backbone_kwargs" in cfg and cfg["backbone_kwargs"] is not None:
+            args.backbone_kwargs = cfg["backbone_kwargs"]
         if "seed" in cfg and cfg["seed"] is not None:
             args.seed = int(cfg["seed"])
 
@@ -198,13 +214,33 @@ def main() -> None:
         args.backbone = "mlp"
     if args.backbone not in VALID_BACKBONES:
         raise SystemExit(
-            f"Invalid backbone '{args.backbone}'. Supported backbones: {VALID_BACKBONES}"
+            f"Invalid backbone '{args.backbone}'. Supported backbones: {tuple(sorted(VALID_BACKBONES))}"
+        )
+    if args.backbone_kwargs is None:
+        backbone_kwargs: dict[str, object] = {}
+    elif isinstance(args.backbone_kwargs, str):
+        try:
+            parsed = json.loads(args.backbone_kwargs)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid JSON for --backbone-kwargs: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise SystemExit("--backbone-kwargs must decode to a JSON object.")
+        backbone_kwargs = parsed
+    elif isinstance(args.backbone_kwargs, dict):
+        backbone_kwargs = args.backbone_kwargs
+    else:
+        raise SystemExit(
+            f"Unsupported backbone_kwargs type: {type(args.backbone_kwargs)}. "
+            "Expected dict or JSON string."
         )
     if args.zarr is None:
         raise SystemExit(
             "You must specify --zarr, either directly on the CLI or via --task-config "
             "(JSON field 'zarr')."
         )
+    num_epochs = args.epochs if args.epochs is not None else EPOCHS
+    if num_epochs <= 0:
+        raise SystemExit("--epochs must be a positive integer.")
 
     # Require explicit state/action specification via CLI or config.
     # (We intentionally do NOT fall back to the dataset's default single key here.)
@@ -214,23 +250,8 @@ def main() -> None:
             "or via --task-config (with JSON fields 'state_keys' and 'action_keys')."
         )
 
-    # Print resolved run configuration before starting training.
-    print("\nResolved training configuration:")
-    print(f"  zarr={args.zarr}")
-    print(
-        f"  extra_zarr={[str(p) for p in args.extra_zarr] if args.extra_zarr else []}"
-    )
-    print(f"  policy={args.policy}")
-    print(f"  chunk_size={args.chunk_size}")
-    print(f"  state_keys={args.state_keys}")
-    print(f"  action_keys={args.action_keys}")
-    print(f"  lr={args.lr if args.lr is not None else LR}")
-    print(f"  backbone={args.backbone}")
-    print(f"  seed={args.seed}")
-
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
 
     # ── load data ─────────────────────────────────────────────────────
     zarr_paths = [args.zarr]
@@ -283,18 +304,19 @@ def main() -> None:
         action_dim=actions.shape[1],
         chunk_size=args.chunk_size,
         backbone=args.backbone,
+        **backbone_kwargs,
         # TODO: build with your desired specifications
     ).to(device)
+    resolved_policy_cfg = get_policy_checkpoint_config(model)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model parameters: {n_params:,}")
 
     # TODO: implement an optimizer and scheduler
     lr = args.lr if args.lr is not None else LR
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=EPOCHS,
+        T_max=num_epochs,
         eta_min=lr * 0.01,  # anneal close to (but not all the way to) zero
     )
 
@@ -326,7 +348,37 @@ def main() -> None:
     save_path = ckpt_dir / save_name
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(1, EPOCHS + 1):
+    # Single consolidated run summary.
+    print("\nResolved training configuration:")
+    print(f"  device={device}")
+    print(f"  zarr={args.zarr}")
+    print(
+        f"  extra_zarr={[str(p) for p in args.extra_zarr] if args.extra_zarr else []}"
+    )
+    print(f"  policy={args.policy}")
+    print(f"  backbone={args.backbone}")
+    print(f"  backbone_kwargs_input={backbone_kwargs}")
+    if "backbone" in resolved_policy_cfg and "backbone_kwargs" in resolved_policy_cfg:
+        print(f"  backbone_resolved={resolved_policy_cfg['backbone']}")
+        print(
+            f"  backbone_kwargs_resolved={resolved_policy_cfg['backbone_kwargs']}"
+        )
+    print(f"  chunk_size={args.chunk_size}")
+    print(f"  state_keys={args.state_keys}")
+    print(f"  action_keys={args.action_keys}")
+    print(f"  state_dim={states.shape[1]}")
+    print(f"  action_dim={actions.shape[1]}")
+    print(f"  dataset_size={len(dataset)}")
+    print(f"  train_size={n_train}")
+    print(f"  val_size={n_val}")
+    print(f"  batch_size={BATCH_SIZE}")
+    print(f"  epochs={num_epochs}")
+    print(f"  lr={lr}")
+    print(f"  seed={args.seed}")
+    print(f"  model_parameters={n_params:,}")
+    print(f"  checkpoint_path={save_path}")
+
+    for epoch in range(1, num_epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, device)
         val_loss = evaluate(model, val_loader, device)
         scheduler.step()
@@ -334,6 +386,12 @@ def main() -> None:
         tag = ""
         if val_loss < best_val:
             best_val = val_loss
+            policy_ckpt_cfg = get_policy_checkpoint_config(model)
+            if "backbone" not in policy_ckpt_cfg or "backbone_kwargs" not in policy_ckpt_cfg:
+                policy_ckpt_cfg = {
+                    "backbone": args.backbone,
+                    "backbone_kwargs": dict(backbone_kwargs),
+                }
             torch.save(
                 {
                     "epoch": epoch,
@@ -347,21 +405,19 @@ def main() -> None:
                     },
                     "chunk_size": args.chunk_size,
                     "policy_type": args.policy,
-                    "backbone": args.backbone,
-                    "d_model": int(getattr(model, "d_model", 128)),
-                    "depth": int(getattr(model, "depth", 2)),
                     "state_keys": args.state_keys,
                     "action_keys": args.action_keys,
                     "state_dim": int(states.shape[1]),
                     "action_dim": int(actions.shape[1]),
                     "val_loss": val_loss,
+                    **policy_ckpt_cfg,
                 },
                 save_path,
             )
             tag = " ✓ saved"
 
         print(
-            f"Epoch {epoch:3d}/{EPOCHS} | "
+            f"Epoch {epoch:3d}/{num_epochs} | "
             f"train {train_loss:.6f} | val {val_loss:.6f}{tag}"
         )
 

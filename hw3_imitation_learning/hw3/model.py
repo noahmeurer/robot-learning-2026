@@ -3,12 +3,51 @@
 from __future__ import annotations
 
 import abc
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 import torch
 from torch import nn
 
-VALID_BACKBONES = {"mlp"}  # TODO: Add more backbones here
+_BACKBONE_DEFAULT_KWARGS: dict[str, dict[str, Any]] = {
+    "mlp": {"hidden_dim": 512, "depth": 4},
+}
+VALID_BACKBONES = set(_BACKBONE_DEFAULT_KWARGS)
+
+
+def resolve_backbone_kwargs(backbone: str, **kwargs: Any) -> dict[str, Any]:
+    """Validate and resolve kwargs for a given backbone."""
+    if backbone not in _BACKBONE_DEFAULT_KWARGS:
+        raise ValueError(
+            f"Unknown backbone: {backbone}. Supported backbones: {sorted(VALID_BACKBONES)}"
+        )
+
+    defaults = _BACKBONE_DEFAULT_KWARGS[backbone]
+    unexpected = set(kwargs) - set(defaults)
+    if unexpected:
+        raise ValueError(
+            f"Unexpected kwargs for backbone '{backbone}': {sorted(unexpected)}. "
+            f"Expected subset of {sorted(defaults)}."
+        )
+
+    resolved = {**defaults, **kwargs}
+    if backbone == "mlp":
+        resolved["hidden_dim"] = int(resolved["hidden_dim"])
+        resolved["depth"] = int(resolved["depth"])
+        if resolved["hidden_dim"] <= 0 or resolved["depth"] <= 0:
+            raise ValueError("MLP backbone requires positive 'hidden_dim' and 'depth'.")
+    return resolved
+
+
+def get_policy_checkpoint_config(model: "BasePolicy") -> dict[str, Any]:
+    """Return checkpoint model config metadata for reconstructing a policy."""
+    backbone = getattr(model, "backbone_name", None)
+    backbone_kwargs = getattr(model, "backbone_kwargs", None)
+    if backbone is None or backbone_kwargs is None:
+        return {}
+    return {
+        "backbone": backbone,
+        "backbone_kwargs": dict(backbone_kwargs),
+    }
 
 class BasePolicy(nn.Module, metaclass=abc.ABCMeta):
     """Base class for action chunking policies."""
@@ -35,8 +74,8 @@ class MLP(nn.Module):
         self,
         in_dim: int,
         out_dim: int,
-        hidden_dim: int = 128,
-        depth: int = 2,
+        hidden_dim: int = 512,
+        depth: int = 4,
         activation: type[nn.Module] = nn.GELU,
         use_layernorm: bool = False
         ) -> None:
@@ -77,31 +116,25 @@ class ObstaclePolicy(BasePolicy):
         action_dim: int, 
         chunk_size: int,
         backbone: str = "mlp",
-        d_model: int = 128,
-        depth: int = 2,
+        **kwargs
         ) -> None:
         super().__init__(state_dim, action_dim, chunk_size)
         assert isinstance(backbone, str) and backbone, (
             "ObstaclePolicy requires a non-empty backbone string."
         )
-        
-        self.d_model = int(d_model)
-        self.depth = int(depth)
 
         # Define loss function
         self.loss_fn = nn.MSELoss()
+        self.backbone_name = backbone
+        self.backbone_kwargs = resolve_backbone_kwargs(backbone, **kwargs)
 
         # Select backbone
-        if backbone not in VALID_BACKBONES:
-            raise ValueError(
-                f"Unknown backbone: {backbone}. Supported backbones: {sorted(VALID_BACKBONES)}"
-            )
         if backbone == "mlp":
             self.backbone = MLP(
                 state_dim,
                 chunk_size * action_dim,
-                hidden_dim=self.d_model,
-                depth=self.depth,
+                hidden_dim=self.backbone_kwargs["hidden_dim"],
+                depth=self.backbone_kwargs["depth"],
                 use_layernorm=True,
             )
 
@@ -153,8 +186,7 @@ def build_policy(
     action_dim: int,
     chunk_size: int,
     backbone: str | None = None,
-    d_model: int = 128,
-    depth: int = 2,
+    **kwargs,
     # TODO,
 ) -> BasePolicy:
     if policy_type == "obstacle":
@@ -168,8 +200,7 @@ def build_policy(
             action_dim=action_dim,
             chunk_size=chunk_size,
             backbone=backbone,
-            d_model=d_model,
-            depth=depth,
+            **kwargs,
             # TODO: Build with your chosen specifications
         )
     if policy_type == "multitask":

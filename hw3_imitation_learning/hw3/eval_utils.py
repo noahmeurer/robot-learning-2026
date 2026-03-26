@@ -104,7 +104,7 @@ def load_checkpoint(
     action_dim = int(ckpt["action_dim"])
     chunk_size = int(ckpt["chunk_size"])
     state_keys: list[str] = ckpt["state_keys"]
-    action_keys: list[str] | None = ckpt.get("action_keys")
+    action_keys: list[str] = ckpt["action_keys"]
 
     norm_data = ckpt["normalizer"]
     normalizer = Normalizer(
@@ -114,16 +114,30 @@ def load_checkpoint(
         action_std=np.asarray(norm_data["action_std"], dtype=np.float32),
     )
 
-    d_model = int(ckpt.get("d_model", 128))
-    depth = int(ckpt.get("depth", 2))
-    policy_type = str(ckpt.get("policy_type", "obstacle"))
+    policy_type = str(ckpt["policy_type"])
+    if "backbone" not in ckpt:
+        raise KeyError(
+            "Checkpoint is missing required key 'backbone'. "
+            "Please retrain and save with the new checkpoint schema."
+        )
+    if "backbone_kwargs" not in ckpt:
+        raise KeyError(
+            "Checkpoint is missing required key 'backbone_kwargs'. "
+            "Please retrain and save with the new checkpoint schema."
+        )
+    backbone = str(ckpt["backbone"])
+    backbone_kwargs = ckpt["backbone_kwargs"]
+    if not isinstance(backbone_kwargs, dict):
+        raise TypeError(
+            f"Checkpoint key 'backbone_kwargs' must be a dict, got {type(backbone_kwargs)}."
+        )
     model = build_policy(
         policy_type,
         state_dim=state_dim,
         action_dim=action_dim,
         chunk_size=chunk_size,
-        d_model=d_model,
-        depth=depth,
+        backbone=backbone,
+        **backbone_kwargs,
     )
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
@@ -134,6 +148,7 @@ def load_checkpoint(
         f"  policy_type={policy_type}, epoch={ckpt.get('epoch', '?')}, "
         f"val_loss={ckpt.get('val_loss', 0):.6f}"
     )
+    print(f"  backbone={backbone}, backbone_kwargs={backbone_kwargs}")
     print(f"  state_keys={state_keys}, action_keys={action_keys}")
     print(f"  state_dim={state_dim}, action_dim={action_dim}, chunk_size={chunk_size}")
 
