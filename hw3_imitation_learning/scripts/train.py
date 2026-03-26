@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, random_split
 # TODO: Choose your own hyperparameters!
 EPOCHS = 200
 BATCH_SIZE = 512
-LR = 3e-4
+LR = 1e-4
 VAL_SPLIT = 0.1
 def train_one_epoch(
     model: BasePolicy,
