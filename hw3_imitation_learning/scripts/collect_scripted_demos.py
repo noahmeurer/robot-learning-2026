@@ -49,9 +49,9 @@ if _SCRIPTS_DIR not in sys.path:
 from record_teleop_demos import MulticubeZarrWriter
 
 # ── planner constants (metres) ────────────────────────────────────────
-SAFE_Z = 0.18
+SAFE_Z = 0.2
 GRASP_Z = 0.065
-RELEASE_Z = 0.18
+RELEASE_Z = 0.2
 MOVE_STEP = 0.01
 XY_TOL = 0.012
 Z_TOL = 0.008
@@ -68,7 +68,7 @@ GRASP_OFFSET_X = -0.013
 GRASP_OFFSET_Y = 0.0
 
 # Release XY offset: same idea but for the bin drop position.
-RELEASE_OFFSET_X = -0.02
+RELEASE_OFFSET_X = -0.013
 
 XML_PATH = ASSETS_DIR / "so100_multicube_ee.xml"
 

@@ -29,7 +29,7 @@ from hw3.model import BasePolicy, VALID_BACKBONES, build_policy, get_policy_chec
 from torch.utils.data import DataLoader, random_split
 
 # TODO: Choose your own hyperparameters!
-EPOCHS = 200
+EPOCHS = 80
 BATCH_SIZE = 512
 LR = 1e-4
 VAL_SPLIT = 0.1

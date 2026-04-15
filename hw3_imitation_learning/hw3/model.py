@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 _BACKBONE_DEFAULT_KWARGS: dict[str, dict[str, Any]] = {
-    "mlp": {"hidden_dim": 512, "depth": 4, "use_layernorm": True, "dropout": 0.2},
+    "mlp": {"hidden_dim": 512, "depth": 4, "use_layernorm": True, "dropout": 0.1},
     "residual_mlp": {"hidden_dim": 768, "depth": 4, "use_layernorm": True, "dropout": 0.2},
 }
 VALID_BACKBONES = set(_BACKBONE_DEFAULT_KWARGS)
@@ -177,7 +177,7 @@ class ObstaclePolicy(BasePolicy):
         state_dim: int, 
         action_dim: int, 
         chunk_size: int,
-        backbone: str = "residual_mlp",
+        backbone: str = "mlp",
         **kwargs
         ) -> None:
         super().__init__(state_dim, action_dim, chunk_size)
@@ -371,7 +371,7 @@ def build_policy(
 ) -> BasePolicy:
     if policy_type == "obstacle":
         if backbone is None:
-            backbone = "residual_mlp"
+            backbone = "mlp"
         assert isinstance(backbone, str) and backbone, (
             "build_policy() requires a non-empty 'backbone' for obstacle policy."
         )
