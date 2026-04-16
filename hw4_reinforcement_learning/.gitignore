@@ -1,6 +1,7 @@
 *.png
 /logs/ppo/*_model
 /logs/dqn/models/
+/logs/sac/*_model
 *.vscode
 *__pycache__
 .venv/
