@@ -1,6 +1,6 @@
 1. SAC adds an entropy bonus to the reward. What are the benefits of this?
 
-The entropy bonus encourages exploration by rewarding a stochastic policy or in flipped terms preventing the collapse of the policy to a more deterministic (or peaked) distribution. This can help ensure that the agent sufficiently explores it's environment to discover better actions and avoid getting stuck at poor local optima. Another benefit is improved training stability because the policy stays broader.
+The entropy bonus is added to the optimization objective to encourage a stochastic policy or, said differently, discourage the collapse of the policy to a more deterministic (or peaked) distribution. This can help ensure that the agent sufficiently explores it's environment to discover better actions and avoid getting stuck at poor local optima. Another benefit is improved training stability because the policy stays broader.
 
 2. SAC squashes actions through tanh. Why does this require a log-probability correction?
 
